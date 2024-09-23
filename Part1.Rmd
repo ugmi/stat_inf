@@ -9,22 +9,53 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Task 1
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+We load functions from the file.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r, code = readLines("funktioner.R")}
 ```
 
-## Including Plots
+Now, we load the data and configure the model.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+load("proj_data.Rdata")
+modell <- glm(Resultat ~ Alder + Kon + Utbildare, 
+              data = data_individ,
+              family = "binomial")
+(model_output <- summary(modell))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Next, we configure X and y.
+
+```{r}
+y <- matrix(data_individ$Resultat, ncol = 1)
+X <- model.matrix(Resultat ~ Alder + Kon + Utbildare, data = data_individ)
+```
+
+## Task 2
+
+We verify our implementation of Newton-Rhapson's algorithm by computing parameter estimates.
+
+```{r}
+theta0 <- c(0, 0, 0, 0)
+```
+
+## Task 3
+
+We compute the approximations of standard errors by taking the square root of the diagonal elements of Fisher Information.
+
+```{r}
+errors <- sqrt(diag(solve(I(modell$coefficients, y, X))))
+abs(errors - model_output$coefficients[, 2])
+```
+
+Seems like the differences are very small.
+
+## Task 4
+
+Approximate the errors using parametric Bootstrap.
+
+```{r}
+
+```
