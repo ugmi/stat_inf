@@ -1,0 +1,152 @@
+---
+title: "Part2"
+author: "Ugne Milasiunaite (20010905-8420) & Meike Knull (20001220-T588)"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We load the functions from Part1.
+
+```{r}
+source("funktioner.R")
+```
+
+Next, we recreate the model from previous task.
+
+```{r}
+load("proj_data.Rdata")
+modell <- glm(Resultat ~ Alder + Kon + Utbildare,
+              data = data_individ,
+              family = "binomial")
+(model_output <- summary(modell))
+y <- matrix(data_individ$Resultat, ncol = 1)
+X <- model.matrix(Resultat ~ Alder + Kon + Utbildare,
+data = data_individ)
+```
+
+## Task 1
+
+We verify, using functions I and NR from Part I, that the z value column of the output are Wald statistics. Note that z values in the output test if the true parameter is 0.
+
+```{r}
+zval <- model_output$coefficients[, 3]
+theta0 <- c(0, 0, 0, 0)
+niter <- 100
+mle_theta <- NR(theta0, niter, y, X)
+se <- sqrt(diag(solve(I(mle_theta, y, X))))
+abs(mle_theta/se - zval)
+```
+
+We see that the difference between our computed statistic and the output of R's summary function for z values are identical for 5 significant digits for all parameter values.
+
+## Task 2
+
+We compute the generalized likelihood ratio statistics that correspond to the Wald statistics in Task 1 and determine the corresponding p-values.
+
+```{r}
+coefs <- model_output$coefficients[, 1]
+
+# statistic for intercept
+eta <- NR(theta0 = c(0, 0, 0), niter = 10, y = y, X = X[, -1])
+W1 <- 2 * log(L(coefs, y, X)/L(c(0, eta), y, X))
+
+# statistic for age
+eta <- NR(theta0 = c(0, 0, 0), niter = 10, y = y, X = X[, -2])
+W2 <- 2 * log(L(coefs, y, X)/L(c(eta[1], 0, eta[2:3]), y, X))
+
+# statistic for sex
+eta <- NR(theta0 = c(0, 0, 0), niter = 10, y = y, X = X[, -3])
+W3 <- 2 * log(L(coefs, y, X)/L(c(eta[1:2], 0, eta[3]), y, X))
+
+# statistic for education
+eta <- NR(theta0 = c(0, 0, 0), niter = 10, y = y, X = X[, -4])
+W4 <- 2 * log(L(coefs, y, X)/L(c(eta, 0), y, X))
+
+```
+
+Check that we have the same order of magnitude.
+
+```{r}
+matrix(c(W1, W2, W3, W4, as.vector(zval) ** 2), ncol = 4, byrow = TRUE, 
+       dimnames = list(c("W", "z^2"), names(zval)))
+```
+
+Now calculate the p-values.
+
+```{r}
+
+```
+
+## Task 3
+
+We compute the ML estimate under the null hypothesis and use the result to determine a p-value based on the generalized score statistic.
+
+```{r}
+# ml estimate
+estm <- NR(theta0 = c(0, 0), niter = 10, y = y, X = X[, 3:4])
+# parameter values under null hypothesis
+theta_h0 <- c(0, 0, estm)
+# generalized score test statistic
+score <- S(theta_h0, y, X)
+Ts <- t(score) %*% solve(I(theta_h0, y, X)) %*% score
+# calculate p-value
+```
+
+## Task 4
+
+We compute the profile likelihood for parameter Q on a grid of parameter values XXX.
+
+```{r}
+grid <- seq(-0.3, 0.3, 0.02)
+n_thetas <- length(grid)
+Lps <- numeric(n_thetas)
+Les <- numeric(n_thetas)
+for (i in 1:n_thetas) {
+  profil <- glm.fit(x = X[, -3], y = y, 
+                    offset = grid[i] * X[, 3],
+                    family = binomial())
+  coefs_h0 <- profil$coefficients
+  Lps[i] <- L(c(coefs_h0[1:2], grid[i], coefs_h0[3]), y, X)
+  Les[i] <- L(c(coefs[1:2], grid[i], coefs[4]), y, X)
+}
+```
+
+Now, we choose the level for confidence interval.
+
+```{r}
+# construct a test value for profile likelihood
+Lp_test <- L(coefs, y, X) * exp(-1/2 * qchisq(p=0.95, df=1))
+```
+
+We use the results to graph the profile likelihood Lp together with the corresponding estimated likelihood Le and the line signifying the threshold for 95% significance.
+
+```{r}
+plot(grid, Lps, pch = 20, ylim = c(0, max(Lps)), ylab = "Likelihood", xaxp = c(-0.3, 0.3, 12))
+points(grid, Les, pch = 3)
+abline(h = Lp_test, lty = "dashed")
+legend(x = "topleft", legend = c("95% threshold", "Estimated", "Profile"), pch = c(NA, 3, 20), lty = c("dashed", NA, NA), bty = "n")
+```
+
+Now we compare the intervals.
+
+For profile likelihood, we have that the 95% confidence interval is $\{L_p(\theta_{Kon}) \ge L_p(\hat\theta_{ML})\exp(-0.5\chi_{0.95}^2(1))\} = \{L_p (\theta_{Kon}) \ge Lptest\}$. For Wald interval, the z value is `r qnorm(p=0.975)`.
+
+```{r}
+lbound <- coefs[3] - qnorm(p=0.975) * model_output$coefficients[3, 2]
+ubound <- coefs[3] + qnorm(p=0.975) * model_output$coefficients[3, 2]
+```
+
+So the Wald interval is [`r lbound`, `r ubound`]. Compare visually.
+
+```{r}
+plot(grid, Lps, type = "l", ylim = c(0, max(Lps)), ylab = "Likelihood", xaxp = c(-0.3, 0.3, 12))
+abline(h = Lp_test, lty = "dashed")
+abline(v = lbound, col = "red")
+abline(v = ubound, col = "red")
+legend(x = "topleft", legend = c("threshold Lp", "Profile", "bounds Wald"), lty = c("dashed", "solid", "solid"), col = c("black", "black", "red"), bg = "white")
+```
+
